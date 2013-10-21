@@ -98,6 +98,22 @@ CONFIG_AUDIT_TREE=y
 CONFIG_HAVE_GENERIC_HARDIRQS=y
 
 #
+<<<<<<< HEAD:arch/arm/configs/cyanogenmod_nicki_defconfig
+=======
+# SXDNickiHybrid Kernel
+#
+CONFIG_INTELLI_PLUG=y
+CONFIG_TURBO_BOOST=y
+CONFIG_FORCE_FAST_CHARGE=y
+CONFIG_ZSWAP=y
+CONFIG_F2FS_STAT_FS=y
+CONFIG_F2FS_FS_XATTR=y
+CONFIG_F2FS_FS_POSIX_ACL=y
+CONFIG_F2FS_FS_SECURITY=y
+# CONFIG_F2FS_CHECK_FS is not set
+
+#
+>>>>>>> 7010b02... lib: Sparc's strncpy_from_user is generic enough, move under lib/:arch/arm/configs/sxdnickihb_defconfig
 # IRQ subsystem
 #
 CONFIG_GENERIC_HARDIRQS=y
@@ -695,7 +711,14 @@ CONFIG_VIRT_TO_BUS=y
 # CONFIG_KSM is not set
 CONFIG_DEFAULT_MMAP_MIN_ADDR=4096
 CONFIG_CLEANCACHE=y
+<<<<<<< HEAD:arch/arm/configs/cyanogenmod_nicki_defconfig
 CONFIG_USE_USER_ACCESSIBLE_TIMERS=y
+=======
+CONFIG_FRONTSWAP=y
+# CONFIG_ZSMALLOC_NEW is not set
+CONFIG_DIRECT_RECLAIM_ALLOW_COMPACTION=y
+CONFIG_DYNAMIC_PAGE_WRITEBACK=y
+>>>>>>> 7010b02... lib: Sparc's strncpy_from_user is generic enough, move under lib/:arch/arm/configs/sxdnickihb_defconfig
 # CONFIG_ARCH_MEMORY_PROBE is not set
 # CONFIG_ARCH_MEMORY_REMOVE is not set
 # CONFIG_ENABLE_DMM is not set
@@ -3698,6 +3721,10 @@ CONFIG_MISC_FILESYSTEMS=y
 # CONFIG_PSTORE is not set
 # CONFIG_SYSV_FS is not set
 # CONFIG_UFS_FS is not set
+<<<<<<< HEAD:arch/arm/configs/cyanogenmod_nicki_defconfig
+=======
+CONFIG_F2FS_FS=y
+>>>>>>> 7010b02... lib: Sparc's strncpy_from_user is generic enough, move under lib/:arch/arm/configs/sxdnickihb_defconfig
 CONFIG_NETWORK_FILESYSTEMS=y
 CONFIG_NFS_FS=y
 CONFIG_NFS_V3=y
@@ -3765,7 +3792,12 @@ CONFIG_NLS_ISO8859_1=y
 # CONFIG_NLS_ISO8859_15 is not set
 # CONFIG_NLS_KOI8_R is not set
 # CONFIG_NLS_KOI8_U is not set
+<<<<<<< HEAD:arch/arm/configs/cyanogenmod_nicki_defconfig
 # CONFIG_NLS_UTF8 is not set
+=======
+CONFIG_NLS_UTF8=y
+CONFIG_DYNAMIC_FSYNC=y
+>>>>>>> 7010b02... lib: Sparc's strncpy_from_user is generic enough, move under lib/:arch/arm/configs/sxdnickihb_defconfig
 
 #
 # Kernel hacking
@@ -3983,6 +4015,11 @@ CONFIG_CRYPTO_TWOFISH_COMMON=y
 CONFIG_CRYPTO_DEFLATE=y
 # CONFIG_CRYPTO_ZLIB is not set
 # CONFIG_CRYPTO_LZO is not set
+<<<<<<< HEAD:arch/arm/configs/cyanogenmod_nicki_defconfig
+=======
+CONFIG_CRYPTO_LZ4=y
+# CONFIG_CRYPTO_LZ4HC is not set
+>>>>>>> 7010b02... lib: Sparc's strncpy_from_user is generic enough, move under lib/:arch/arm/configs/sxdnickihb_defconfig
 
 #
 # Random Number Generation
