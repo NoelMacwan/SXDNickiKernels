@@ -1059,8 +1059,12 @@ static int f2fs_write_end(struct file *file,
 	return copied;
 }
 
-static int check_direct_IO(struct inode *inode, int rw,
+static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
+#ifdef CONFIG_AIO_OPTIMIZATION
+		struct iov_iter *iter, loff_t offset)
+#else
 		const struct iovec *iov, loff_t offset, unsigned long nr_segs)
+#endif
 {
 	unsigned blocksize_mask = inode->i_sb->s_blocksize - 1;
 	int i;
@@ -1092,6 +1096,7 @@ static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
 	if (f2fs_has_inline_data(inode))
 		return 0;
 
+<<<<<<< HEAD
 	if (check_direct_IO(inode, rw, iov, offset, nr_segs))
 		return 0;
 
@@ -1108,6 +1113,15 @@ static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
 	trace_f2fs_direct_IO_exit(inode, offset, count, rw, err);
 
 	return err;
+
+	/* Needs synchronization with the cleaner */
+#ifdef CONFIG_AIO_OPTIMIZATION
+	return blockdev_direct_IO(rw, iocb, inode, iter, offset,
+						  get_data_block_ro);
+#else
+	return blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
+						  get_data_block_ro);
+#endif
 }
 
 static void f2fs_invalidate_data_page(struct page *page, unsigned long offset)
