@@ -1723,13 +1723,9 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 	swap_map = p->swap_map;
 	p->swap_map = NULL;
 	p->flags = 0;
-<<<<<<< HEAD
-=======
-	spin_unlock(&p->lock);
 #ifdef CONFIG_FRONTSWAP
 	frontswap_invalidate_area(type);
 #endif
->>>>>>> 2524288... Add zSwap from Linux 3.11
 	spin_unlock(&swap_lock);
 	mutex_unlock(&swapon_mutex);
 	vfree(swap_map);
