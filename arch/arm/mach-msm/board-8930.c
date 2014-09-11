@@ -2360,7 +2360,7 @@ static struct gpio_keys_button the_buttons[] = {
 		.gpio = GPIO_VOLUME_UP,
 		.code = KEY_VOLUMEUP,
 		.desc = "Volume Up",
-		.wakeup = 1,		
+		.wakeup = 1,
 		.active_low = 1,
 		.debounce_interval = 100
 	},
@@ -3466,9 +3466,9 @@ static void __init register_i2c_devices(void)
 		int	bus, size;
 
 		//PERI-OH-Fix_Coverity_#76046-00*{
-		if (gpio_tlmm_config( GPIO_CFG( 78, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA ), GPIO_CFG_ENABLE))
+		if (gpio_tlmm_config( GPIO_CFG( 78, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA ), GPIO_CFG_ENABLE ))
 		{
-			printk(KERN_ERR "Config GPIO_78 error!\n");
+			printk(KERN_ERR "Config GPIO_78 error");
 		}
 		//PERI-OH-Fix_Coverity_#76046-00*}
 

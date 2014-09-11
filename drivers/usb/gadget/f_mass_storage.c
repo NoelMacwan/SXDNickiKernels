@@ -3376,7 +3376,7 @@ static void fsg_unbind(struct usb_configuration *c, struct usb_function *f)
 	struct fsg_common	*common = fsg->common;
 /*CONN-EH-PCCOMPANION-00+{*/
 #ifdef F_CDROM
-	int i;//MTD-CONN-EH-PCCOMPANION-01+
+	int i;
 #endif
 /*CONN-EH-PCCOMPANION-00+}*/
 

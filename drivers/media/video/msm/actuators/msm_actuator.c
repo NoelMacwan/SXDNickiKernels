@@ -239,9 +239,9 @@ static int32_t msm_actuator_move_focus(
 	uint16_t curr_lens_pos = 0;
 	int dir = move_params->dir;
 	int32_t num_steps = move_params->num_steps;
-
+    
        struct msm_camera_i2c_client *af_client = NULL;//MM-MC-BringUpAD5816ForAfOfLitenCustomizationModule-00+
-       struct damping_params_t ringing_params_kernel;
+	struct damping_params_t ringing_params_kernel;
 
 	if (copy_from_user(&ringing_params_kernel,
 		&(move_params->ringing_params[a_ctrl->curr_region_index]),

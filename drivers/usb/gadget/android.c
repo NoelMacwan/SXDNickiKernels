@@ -1806,7 +1806,7 @@ static DEVICE_ATTR(eui64_id, S_IRUGO | S_IWUSR,
 static struct device_attribute *mass_storage_function_attributes[] = {
 	&dev_attr_inquiry_string,
 	&dev_attr_serial_number,
-	&dev_attr_eui64_id,	
+	&dev_attr_eui64_id,
 	NULL
 };
 /*CONN-EH-SCSI-00+}*/
