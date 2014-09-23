@@ -5053,4 +5053,616 @@ static void rebalance_domains(int cpu, enum cpu_idle_type idle)
 		if (need_serialize)
 			spin_unlock(&balancing);
 out:
-		if (time_after(next_balance, sd->last_balance + interva
+		if (time_after(next_balance, sd->last_balance + interval)) {
+			next_balance = sd->last_balance + interval;
+			update_next_balance = 1;
+		}
+
+		/*
+		 * Stop the load balance at this level. There is another
+		 * CPU in our sched group which is doing load balancing more
+		 * actively.
+		 */
+		if (!balance)
+			break;
+	}
+	rcu_read_unlock();
+
+	/*
+	 * next_balance will be updated only when there is a need.
+	 * When the cpu is attached to null domain for ex, it will not be
+	 * updated.
+	 */
+	if (likely(update_next_balance))
+		rq->next_balance = next_balance;
+}
+
+#ifdef CONFIG_NO_HZ
+/*
+ * In CONFIG_NO_HZ case, the idle balance kickee will do the
+ * rebalancing for all the cpus for whom scheduler ticks are stopped.
+ */
+static void nohz_idle_balance(int this_cpu, enum cpu_idle_type idle)
+{
+	struct rq *this_rq = cpu_rq(this_cpu);
+	struct rq *rq;
+	int balance_cpu;
+
+	if (idle != CPU_IDLE ||
+	    !test_bit(NOHZ_BALANCE_KICK, nohz_flags(this_cpu)))
+		goto end;
+
+	for_each_cpu(balance_cpu, nohz.idle_cpus_mask) {
+		if (balance_cpu == this_cpu || !idle_cpu(balance_cpu))
+			continue;
+
+		/*
+		 * If this cpu gets work to do, stop the load balancing
+		 * work being done for other cpus. Next load
+		 * balancing owner will pick it up.
+		 */
+		if (need_resched())
+			break;
+
+		raw_spin_lock_irq(&this_rq->lock);
+		update_rq_clock(this_rq);
+		update_cpu_load(this_rq);
+		raw_spin_unlock_irq(&this_rq->lock);
+
+		rebalance_domains(balance_cpu, CPU_IDLE);
+
+		rq = cpu_rq(balance_cpu);
+		if (time_after(this_rq->next_balance, rq->next_balance))
+			this_rq->next_balance = rq->next_balance;
+	}
+	nohz.next_balance = this_rq->next_balance;
+end:
+	clear_bit(NOHZ_BALANCE_KICK, nohz_flags(this_cpu));
+}
+
+/*
+ * Current heuristic for kicking the idle load balancer in the presence
+ * of an idle cpu is the system.
+ *   - This rq has more than one task.
+ *   - At any scheduler domain level, this cpu's scheduler group has multiple
+ *     busy cpu's exceeding the group's power.
+ *   - For SD_ASYM_PACKING, if the lower numbered cpu's in the scheduler
+ *     domain span are idle.
+ */
+static inline int nohz_kick_needed(struct rq *rq, int cpu)
+{
+	unsigned long now = jiffies;
+	struct sched_domain *sd;
+
+	if (unlikely(idle_cpu(cpu)))
+		return 0;
+
+       /*
+	* We may be recently in ticked or tickless idle mode. At the first
+	* busy tick after returning from idle, we will update the busy stats.
+	*/
+	set_cpu_sd_state_busy();
+	clear_nohz_tick_stopped(cpu);
+
+	/*
+	 * None are in tickless mode and hence no need for NOHZ idle load
+	 * balancing.
+	 */
+	if (likely(!atomic_read(&nohz.nr_cpus)))
+		return 0;
+
+	if (time_before(now, nohz.next_balance))
+		return 0;
+
+	if (rq->nr_running >= 2)
+		goto need_kick;
+
+	rcu_read_lock();
+	for_each_domain(cpu, sd) {
+		struct sched_group *sg = sd->groups;
+		struct sched_group_power *sgp = sg->sgp;
+		int nr_busy = atomic_read(&sgp->nr_busy_cpus);
+
+		if (sd->flags & SD_SHARE_PKG_RESOURCES && nr_busy > 1)
+			goto need_kick_unlock;
+
+		if (sd->flags & SD_ASYM_PACKING && nr_busy != sg->group_weight
+		    && (cpumask_first_and(nohz.idle_cpus_mask,
+					  sched_domain_span(sd)) < cpu))
+			goto need_kick_unlock;
+
+		if (!(sd->flags & (SD_SHARE_PKG_RESOURCES | SD_ASYM_PACKING)))
+			break;
+	}
+	rcu_read_unlock();
+	return 0;
+
+need_kick_unlock:
+	rcu_read_unlock();
+need_kick:
+	return 1;
+}
+#else
+static void nohz_idle_balance(int this_cpu, enum cpu_idle_type idle) { }
+#endif
+
+/*
+ * run_rebalance_domains is triggered when needed from the scheduler tick.
+ * Also triggered for nohz idle balancing (with nohz_balancing_kick set).
+ */
+static void run_rebalance_domains(struct softirq_action *h)
+{
+	int this_cpu = smp_processor_id();
+	struct rq *this_rq = cpu_rq(this_cpu);
+	enum cpu_idle_type idle = this_rq->idle_balance ?
+						CPU_IDLE : CPU_NOT_IDLE;
+
+	rebalance_domains(this_cpu, idle);
+
+	/*
+	 * If this cpu has a pending nohz_balance_kick, then do the
+	 * balancing on behalf of the other idle cpus whose ticks are
+	 * stopped.
+	 */
+	nohz_idle_balance(this_cpu, idle);
+}
+
+static inline int on_null_domain(int cpu)
+{
+	return !rcu_dereference_sched(cpu_rq(cpu)->sd);
+}
+
+/*
+ * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
+ */
+void trigger_load_balance(struct rq *rq, int cpu)
+{
+	/* Don't need to rebalance while attached to NULL domain */
+	if (time_after_eq(jiffies, rq->next_balance) &&
+	    likely(!on_null_domain(cpu)))
+		raise_softirq(SCHED_SOFTIRQ);
+#ifdef CONFIG_NO_HZ
+	if (nohz_kick_needed(rq, cpu) && likely(!on_null_domain(cpu)))
+		nohz_balancer_kick(cpu);
+#endif
+}
+
+static void rq_online_fair(struct rq *rq)
+{
+	update_sysctl();
+}
+
+static void rq_offline_fair(struct rq *rq)
+{
+	update_sysctl();
+
+	/* Ensure any throttled groups are reachable by pick_next_task */
+	unthrottle_offline_cfs_rqs(rq);
+}
+
+#endif /* CONFIG_SMP */
+
+/*
+ * scheduler tick hitting a task of our scheduling class:
+ */
+static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
+{
+	struct cfs_rq *cfs_rq;
+	struct sched_entity *se = &curr->se;
+
+	for_each_sched_entity(se) {
+		cfs_rq = cfs_rq_of(se);
+		entity_tick(cfs_rq, se, queued);
+	}
+}
+
+/*
+ * called on fork with the child task as argument from the parent's context
+ *  - child not yet on the tasklist
+ *  - preemption disabled
+ */
+static void task_fork_fair(struct task_struct *p)
+{
+	struct cfs_rq *cfs_rq;
+	struct sched_entity *se = &p->se, *curr;
+	int this_cpu = smp_processor_id();
+	struct rq *rq = this_rq();
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&rq->lock, flags);
+
+	update_rq_clock(rq);
+
+	cfs_rq = task_cfs_rq(current);
+	curr = cfs_rq->curr;
+
+	if (unlikely(task_cpu(p) != this_cpu)) {
+		rcu_read_lock();
+		__set_task_cpu(p, this_cpu);
+		rcu_read_unlock();
+	}
+
+	update_curr(cfs_rq);
+
+	if (curr)
+		se->vruntime = curr->vruntime;
+	place_entity(cfs_rq, se, 1);
+
+	if (sysctl_sched_child_runs_first && curr && entity_before(curr, se)) {
+		/*
+		 * Upon rescheduling, sched_class::put_prev_task() will place
+		 * 'current' within the tree based on its new key value.
+		 */
+		swap(curr->vruntime, se->vruntime);
+		resched_task(rq->curr);
+	}
+
+	se->vruntime -= cfs_rq->min_vruntime;
+
+	raw_spin_unlock_irqrestore(&rq->lock, flags);
+}
+
+/*
+ * Priority of the task has changed. Check to see if we preempt
+ * the current task.
+ */
+static void
+prio_changed_fair(struct rq *rq, struct task_struct *p, int oldprio)
+{
+	if (!p->se.on_rq)
+		return;
+
+	/*
+	 * Reschedule if we are currently running on this runqueue and
+	 * our priority decreased, or if we are not currently running on
+	 * this runqueue and our priority is higher than the current's
+	 */
+	if (rq->curr == p) {
+		if (p->prio > oldprio)
+			resched_task(rq->curr);
+	} else
+		check_preempt_curr(rq, p, 0);
+}
+
+static void switched_from_fair(struct rq *rq, struct task_struct *p)
+{
+	struct sched_entity *se = &p->se;
+	struct cfs_rq *cfs_rq = cfs_rq_of(se);
+
+	/*
+	 * Ensure the task's vruntime is normalized, so that when its
+	 * switched back to the fair class the enqueue_entity(.flags=0) will
+	 * do the right thing.
+	 *
+	 * If it was on_rq, then the dequeue_entity(.flags=0) will already
+	 * have normalized the vruntime, if it was !on_rq, then only when
+	 * the task is sleeping will it still have non-normalized vruntime.
+	 */
+	if (!se->on_rq && p->state != TASK_RUNNING) {
+		/*
+		 * Fix up our vruntime so that the current sleep doesn't
+		 * cause 'unlimited' sleep bonus.
+		 */
+		place_entity(cfs_rq, se, 0);
+		se->vruntime -= cfs_rq->min_vruntime;
+	}
+}
+
+/*
+ * We switched to the sched_fair class.
+ */
+static void switched_to_fair(struct rq *rq, struct task_struct *p)
+{
+	if (!p->se.on_rq)
+		return;
+
+	/*
+	 * We were most likely switched from sched_rt, so
+	 * kick off the schedule if running, otherwise just see
+	 * if we can still preempt the current task.
+	 */
+	if (rq->curr == p)
+		resched_task(rq->curr);
+	else
+		check_preempt_curr(rq, p, 0);
+}
+
+/* Account for a task changing its policy or group.
+ *
+ * This routine is mostly called to set cfs_rq->curr field when a task
+ * migrates between groups/classes.
+ */
+static void set_curr_task_fair(struct rq *rq)
+{
+	struct sched_entity *se = &rq->curr->se;
+
+	for_each_sched_entity(se) {
+		struct cfs_rq *cfs_rq = cfs_rq_of(se);
+
+		set_next_entity(cfs_rq, se);
+		/* ensure bandwidth has been allocated on our new cfs_rq */
+		account_cfs_rq_runtime(cfs_rq, 0);
+	}
+}
+
+void init_cfs_rq(struct cfs_rq *cfs_rq)
+{
+	cfs_rq->tasks_timeline = RB_ROOT;
+	cfs_rq->min_vruntime = (u64)(-(1LL << 20));
+#ifndef CONFIG_64BIT
+	cfs_rq->min_vruntime_copy = cfs_rq->min_vruntime;
+#endif
+}
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+static void task_move_group_fair(struct task_struct *p, int on_rq)
+{
+	/*
+	 * If the task was not on the rq at the time of this cgroup movement
+	 * it must have been asleep, sleeping tasks keep their ->vruntime
+	 * absolute on their old rq until wakeup (needed for the fair sleeper
+	 * bonus in place_entity()).
+	 *
+	 * If it was on the rq, we've just 'preempted' it, which does convert
+	 * ->vruntime to a relative base.
+	 *
+	 * Make sure both cases convert their relative position when migrating
+	 * to another cgroup's rq. This does somewhat interfere with the
+	 * fair sleeper stuff for the first placement, but who cares.
+	 */
+	/*
+	 * When !on_rq, vruntime of the task has usually NOT been normalized.
+	 * But there are some cases where it has already been normalized:
+	 *
+	 * - Moving a forked child which is waiting for being woken up by
+	 *   wake_up_new_task().
+	 * - Moving a task which has been woken up by try_to_wake_up() and
+	 *   waiting for actually being woken up by sched_ttwu_pending().
+	 *
+	 * To prevent boost or penalty in the new cfs_rq caused by delta
+	 * min_vruntime between the two cfs_rqs, we skip vruntime adjustment.
+	 */
+	if (!on_rq && (!p->se.sum_exec_runtime || p->state == TASK_WAKING))
+		on_rq = 1;
+
+	if (!on_rq)
+		p->se.vruntime -= cfs_rq_of(&p->se)->min_vruntime;
+	set_task_rq(p, task_cpu(p));
+	if (!on_rq)
+		p->se.vruntime += cfs_rq_of(&p->se)->min_vruntime;
+}
+
+void free_fair_sched_group(struct task_group *tg)
+{
+	int i;
+
+	destroy_cfs_bandwidth(tg_cfs_bandwidth(tg));
+
+	for_each_possible_cpu(i) {
+		if (tg->cfs_rq)
+			kfree(tg->cfs_rq[i]);
+		if (tg->se)
+			kfree(tg->se[i]);
+	}
+
+	kfree(tg->cfs_rq);
+	kfree(tg->se);
+}
+
+int alloc_fair_sched_group(struct task_group *tg, struct task_group *parent)
+{
+	struct cfs_rq *cfs_rq;
+	struct sched_entity *se;
+	int i;
+
+	tg->cfs_rq = kzalloc(sizeof(cfs_rq) * nr_cpu_ids, GFP_KERNEL);
+	if (!tg->cfs_rq)
+		goto err;
+	tg->se = kzalloc(sizeof(se) * nr_cpu_ids, GFP_KERNEL);
+	if (!tg->se)
+		goto err;
+
+	tg->shares = NICE_0_LOAD;
+
+	init_cfs_bandwidth(tg_cfs_bandwidth(tg));
+
+	for_each_possible_cpu(i) {
+		cfs_rq = kzalloc_node(sizeof(struct cfs_rq),
+				      GFP_KERNEL, cpu_to_node(i));
+		if (!cfs_rq)
+			goto err;
+
+		se = kzalloc_node(sizeof(struct sched_entity),
+				  GFP_KERNEL, cpu_to_node(i));
+		if (!se)
+			goto err_free_rq;
+
+		init_cfs_rq(cfs_rq);
+		init_tg_cfs_entry(tg, cfs_rq, se, i, parent->se[i]);
+	}
+
+	return 1;
+
+err_free_rq:
+	kfree(cfs_rq);
+err:
+	return 0;
+}
+
+void unregister_fair_sched_group(struct task_group *tg, int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+	unsigned long flags;
+
+	/*
+	* Only empty task groups can be destroyed; so we can speculatively
+	* check on_list without danger of it being re-added.
+	*/
+	if (!tg->cfs_rq[cpu]->on_list)
+		return;
+
+	raw_spin_lock_irqsave(&rq->lock, flags);
+	list_del_leaf_cfs_rq(tg->cfs_rq[cpu]);
+	raw_spin_unlock_irqrestore(&rq->lock, flags);
+}
+
+void init_tg_cfs_entry(struct task_group *tg, struct cfs_rq *cfs_rq,
+			struct sched_entity *se, int cpu,
+			struct sched_entity *parent)
+{
+	struct rq *rq = cpu_rq(cpu);
+
+	cfs_rq->tg = tg;
+	cfs_rq->rq = rq;
+#ifdef CONFIG_SMP
+	/* allow initial update_cfs_load() to truncate */
+	cfs_rq->load_stamp = 1;
+#endif
+	init_cfs_rq_runtime(cfs_rq);
+
+	tg->cfs_rq[cpu] = cfs_rq;
+	tg->se[cpu] = se;
+
+	/* se could be NULL for root_task_group */
+	if (!se)
+		return;
+
+	if (!parent)
+		se->cfs_rq = &rq->cfs;
+	else
+		se->cfs_rq = parent->my_q;
+
+	se->my_q = cfs_rq;
+	update_load_set(&se->load, 0);
+	se->parent = parent;
+}
+
+static DEFINE_MUTEX(shares_mutex);
+
+int sched_group_set_shares(struct task_group *tg, unsigned long shares)
+{
+	int i;
+	unsigned long flags;
+
+	/*
+	 * We can't change the weight of the root cgroup.
+	 */
+	if (!tg->se[0])
+		return -EINVAL;
+
+	shares = clamp(shares, scale_load(MIN_SHARES), scale_load(MAX_SHARES));
+
+	mutex_lock(&shares_mutex);
+	if (tg->shares == shares)
+		goto done;
+
+	tg->shares = shares;
+	for_each_possible_cpu(i) {
+		struct rq *rq = cpu_rq(i);
+		struct sched_entity *se;
+
+		se = tg->se[i];
+		/* Propagate contribution to hierarchy */
+		raw_spin_lock_irqsave(&rq->lock, flags);
+		for_each_sched_entity(se)
+			update_cfs_shares(group_cfs_rq(se));
+		raw_spin_unlock_irqrestore(&rq->lock, flags);
+	}
+
+done:
+	mutex_unlock(&shares_mutex);
+	return 0;
+}
+#else /* CONFIG_FAIR_GROUP_SCHED */
+
+void free_fair_sched_group(struct task_group *tg) { }
+
+int alloc_fair_sched_group(struct task_group *tg, struct task_group *parent)
+{
+	return 1;
+}
+
+void unregister_fair_sched_group(struct task_group *tg, int cpu) { }
+
+#endif /* CONFIG_FAIR_GROUP_SCHED */
+
+
+static unsigned int get_rr_interval_fair(struct rq *rq, struct task_struct *task)
+{
+	struct sched_entity *se = &task->se;
+	unsigned int rr_interval = 0;
+
+	/*
+	 * Time slice is 0 for SCHED_OTHER tasks that are on an otherwise
+	 * idle runqueue:
+	 */
+	if (rq->cfs.load.weight)
+		rr_interval = NS_TO_JIFFIES(sched_slice(&rq->cfs, se));
+
+	return rr_interval;
+}
+
+/*
+ * All the scheduling class methods:
+ */
+const struct sched_class fair_sched_class = {
+	.next			= &idle_sched_class,
+	.enqueue_task		= enqueue_task_fair,
+	.dequeue_task		= dequeue_task_fair,
+	.yield_task		= yield_task_fair,
+	.yield_to_task		= yield_to_task_fair,
+
+	.check_preempt_curr	= check_preempt_wakeup,
+
+	.pick_next_task		= pick_next_task_fair,
+	.put_prev_task		= put_prev_task_fair,
+
+#ifdef CONFIG_SMP
+	.select_task_rq		= select_task_rq_fair,
+
+	.rq_online		= rq_online_fair,
+	.rq_offline		= rq_offline_fair,
+
+	.task_waking		= task_waking_fair,
+#endif
+
+	.set_curr_task          = set_curr_task_fair,
+	.task_tick		= task_tick_fair,
+	.task_fork		= task_fork_fair,
+
+	.prio_changed		= prio_changed_fair,
+	.switched_from		= switched_from_fair,
+	.switched_to		= switched_to_fair,
+
+	.get_rr_interval	= get_rr_interval_fair,
+
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	.task_move_group	= task_move_group_fair,
+#endif
+};
+
+#ifdef CONFIG_SCHED_DEBUG
+void print_cfs_stats(struct seq_file *m, int cpu)
+{
+	struct cfs_rq *cfs_rq;
+
+	rcu_read_lock();
+	for_each_leaf_cfs_rq(cpu_rq(cpu), cfs_rq)
+		print_cfs_rq(m, cpu, cfs_rq);
+	rcu_read_unlock();
+}
+#endif
+
+__init void init_sched_fair_class(void)
+{
+#ifdef CONFIG_SMP
+	open_softirq(SCHED_SOFTIRQ, run_rebalance_domains);
+
+#ifdef CONFIG_NO_HZ
+	nohz.next_balance = jiffies;
+	zalloc_cpumask_var(&nohz.idle_cpus_mask, GFP_NOWAIT);
+	cpu_notifier(sched_ilb_notifier, 0);
+#endif
+#endif /* SMP */
+
+}
