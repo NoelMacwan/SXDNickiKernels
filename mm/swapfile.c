@@ -1722,7 +1722,6 @@ SYSCALL_DEFINE1(swapoff, const char __user *, specialfile)
 	p->max = 0;
 	swap_map = p->swap_map;
 	p->swap_map = NULL;
-	spin_unlock(&p->lock);
 #ifdef CONFIG_FRONTSWAP
 	frontswap_invalidate_area(type);
 #endif
