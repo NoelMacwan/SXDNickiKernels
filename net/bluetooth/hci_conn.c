@@ -404,11 +404,7 @@ void hci_le_ltk_reply(struct hci_conn *conn, __u8 ltk[16])
 	memset(&cp, 0, sizeof(cp));
 
 	cp.handle = cpu_to_le16(conn->handle);
-<<<<<<< HEAD
 	memcpy(cp.ltk, ltk, 16*sizeof(u8));
-=======
-	memcpy(cp.ltk, ltk, sizeof(*ltk));
->>>>>>> 8fbf36d... toolchain: linaro: Fix a bunch of warnings and errors
 
 	hci_send_cmd(hdev, HCI_OP_LE_LTK_REPLY, sizeof(cp), &cp);
 }
