@@ -6,14 +6,8 @@
 
 lib-y		:= backtrace.o changebit.o csumipv6.o csumpartial.o   \
 		   csumpartialcopy.o csumpartialcopyuser.o clearbit.o \
-<<<<<<< HEAD
 		   delay.o findbit.o memchr.o memcpy.o		      \
 		   memmove.o memset.o memzero.o setbit.o              \
-		   strncpy_from_user.o strnlen_user.o                 \
-=======
-		   delay.o findbit.o memchr.o	  	              \
-		   memset.o memzero.o setbit.o                        \
->>>>>>> 5d08f23... ARM: use generic strnlen_user and strncpy_from_user functions
 		   strchr.o strrchr.o                                 \
 		   testchangebit.o testclearbit.o testsetbit.o        \
 		   ashldi3.o ashrdi3.o lshrdi3.o muldi3.o             \
