@@ -263,7 +263,7 @@ static u32 ddl_decoder_seq_done_callback(struct ddl_context *ddl_context,
 		if (res_trk_get_disable_fullhd() &&
 			(seq_hdr_info.img_size_x * seq_hdr_info.img_size_y >
 				1280 * 720)) {
-			DDL_MSG_INFO("Playing video with Resolution greater than 720P HD");
+			DDL_MSG_ERROR("Playing video with Resolution greater than 720P HD");
 		}
 		if (!seq_hdr_info.img_size_x || !seq_hdr_info.img_size_y) {
 			DDL_MSG_ERROR("FATAL:ZeroImageSize");
