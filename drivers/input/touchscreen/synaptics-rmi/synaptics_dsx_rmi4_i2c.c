@@ -39,6 +39,11 @@
 
 #include <linux/input/FIH-tool/config.h>
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/sweep2wake.h>
+#include <linux/input/doubletap2wake.h>
+#endif
+
 #define DRIVER_NAME "synaptics_dsx_i2c"
 #define INPUT_PHYS_NAME "synaptics_dsx_i2c/input0"
 
@@ -2294,6 +2299,14 @@ static int __devexit synaptics_rmi4_remove(struct i2c_client *client)
  */
 static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 {
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	if ((s2w_switch > 0) || (dt2w_switch > 0)) {
+		pr_info("sleep avoided!\n");
+		return;
+	} else {
+#endif
+
 	int retval;
 	unsigned char device_ctrl;
 
@@ -2322,6 +2335,9 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 		rmi4_data->sensor_sleep = true;
 	}
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	}
+#endif
 	return;
 }
 
@@ -2334,6 +2350,14 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
  */
 static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 {
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	if ((s2w_switch > 0) || (dt2w_switch > 0)) {
+		pr_info("wake avoided!\n");
+		return;
+	} else {
+#endif
+
 	int retval;
 	unsigned char device_ctrl;
 
@@ -2362,6 +2386,9 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 		rmi4_data->sensor_sleep = false;
 	}
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	}
+#endif
 	return;
 }
 
