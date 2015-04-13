@@ -91,9 +91,7 @@ static struct msm_mpdec_tuners {
 	.boost_time = MSM_MPDEC_BOOSTTIME,
 	.boost_freq = {
 		MSM_MPDEC_BOOSTFREQ_CPU0,
-		MSM_MPDEC_BOOSTFREQ_CPU1,
-		MSM_MPDEC_BOOSTFREQ_CPU2,
-		MSM_MPDEC_BOOSTFREQ_CPU3
+		MSM_MPDEC_BOOSTFREQ_CPU1
 	},
 #endif
 };
