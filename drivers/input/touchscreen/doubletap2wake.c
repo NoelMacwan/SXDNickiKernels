@@ -64,7 +64,7 @@
 /* Resources */
 static struct wake_lock dt2w_wake_lock;
 int dt2w_switch = 0;
-bool scr_suspended = false;
+bool dt2w_scr_suspended = false;
 bool touchdown = false;
 static bool touch_x_called = false, touch_y_called = false;
 static struct input_dev * doubletap2wake_pwrdev;
@@ -159,7 +159,7 @@ static void detect_dt2w(int x, int y, s64 trigger_time)
 
 static void dt2w_input_callback(struct work_struct *unused) {
 msleep(25);
-if (scr_suspended) {
+if (dt2w_scr_suspended) {
 	if(touchdown) {
 		touchdown = false;
 		detect_dt2w(last_touch_position_x, last_touch_position_y, ktime_to_ms(ktime_get()));
@@ -264,12 +264,12 @@ static struct input_handler dt2w_input_handler = {
 
 #ifdef CONFIG_POWERSUSPEND
 static void dt2w_power_suspend(struct power_suspend *h) {
-	scr_suspended = true;
+	dt2w_scr_suspended = true;
 	printk("ngxson: debug POWERSUSPEND pwr off");
 }
 
 static void dt2w_power_resume(struct power_suspend *h) {
-	scr_suspended = false;
+	dt2w_scr_suspended = false;
 	printk("ngxson: debug POWERSUSPEND pwr on");
 }
 
@@ -282,13 +282,13 @@ static struct power_suspend dt2w_power_suspend_handler = {
 static void dt2w_early_suspend(struct early_suspend *h) {
 	if(dt2w_switch > 0) wake_lock(&dt2w_wake_lock);
 	printk("ngxson: debug EARLYSUSPEND pwr off");
-	scr_suspended = true;
+	dt2w_scr_suspended = true;
 }
 
 static void dt2w_late_resume(struct early_suspend *h) {
 	if(dt2w_switch > 0) wake_unlock(&dt2w_wake_lock);
 	printk("ngxson: debug EARLYSUSPEND pwr on");
-	scr_suspended = false;
+	dt2w_scr_suspended = false;
 }
 
 static struct early_suspend dt2w_early_suspend_handler = {
@@ -324,13 +324,13 @@ static ssize_t dt2w_doubletap2wake_dump(struct device *dev,
 	else
 		return -EINVAL;
 	if (dt2w_switch != value) {
-		// dt2w_switch is safe to be changed only when !scr_suspended
-		if (scr_suspended) {
+		// dt2w_switch is safe to be changed only when !dt2w_scr_suspended
+		if (dt2w_scr_suspended) {
 			dt2w_reset();
 			doubletap2wake_pwrswitch();
 			msleep(400);
 		}
-		if (!scr_suspended) {
+		if (!dt2w_scr_suspended) {
 			dt2w_switch = value;
 		}
 	}
