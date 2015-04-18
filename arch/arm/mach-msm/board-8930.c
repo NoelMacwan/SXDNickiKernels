@@ -878,6 +878,7 @@ static void __init msm8930_early_memory(void)
 static void __init msm8930_reserve(void)
 {
 	msm_reserve();
+	msm8930_add_persistent_ram();
 }
 
 static void __init msm8930_allocate_memory_regions(void)
@@ -3734,6 +3735,7 @@ static void __init msm8930_cdp_init(void)
 		mxt_init_vkeys_8930();
 	register_i2c_devices();
 	msm8930_init_fb();
+	msm8930_add_ramconsole_devices();
 
 	if (socinfo_get_platform_subtype() == PLATFORM_SUBTYPE_SGLTE) {
 		reg_size = ARRAY_SIZE((
