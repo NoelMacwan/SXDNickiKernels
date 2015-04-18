@@ -40,6 +40,14 @@
 #endif
 #include <linux/wakelock.h>
 
+/* uncomment since no touchscreen defines android touch, do that here */
+//#define ANDROID_TOUCH_DECLARED
+
+/* if Sweep2Wake is compiled it will already have taken care of this */
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#define ANDROID_TOUCH_DECLARED
+#endif
+
 /* Version, author, desc, etc */
 #define DRIVER_AUTHOR "Dennis Rassmann <showp1984@gmail.com>"
 #define DRIVER_DESCRIPTION "DoubleTap2Wake for almost any device"
@@ -354,9 +362,14 @@ static DEVICE_ATTR(doubletap2wake_version, (S_IWUSR|S_IRUGO),
 /*
  * INIT / EXIT stuff below here
  */
-//extern struct kobject *android_touch_kobj;
+
+#ifdef ANDROID_TOUCH_DECLARED
+extern struct kobject *android_touch_kobj;
+#else
+
 struct kobject *android_touch_kobj;
 EXPORT_SYMBOL_GPL(android_touch_kobj);
+#endif
 
 static int __init doubletap2wake_init(void)
 {
@@ -388,11 +401,13 @@ static int __init doubletap2wake_init(void)
 	rc = input_register_handler(&dt2w_input_handler);
 	if (rc)
 		printk("%s: dt2w Failed to register dt2w_input_handler\n", __func__);
-    
+
+#ifndef ANDROID_TOUCH_DECLARED    
     android_touch_kobj = kobject_create_and_add("android_touch", NULL) ;
     if (android_touch_kobj == NULL) {
         pr_warn("%s: android_touch_kobj create_and_add failed\n", __func__);
     }
+#endif
     rc = sysfs_create_file(android_touch_kobj, &dev_attr_doubletap2wake.attr);
     if (rc) {
         pr_warn("%s: sysfs_create_file failed for doubletap2wake\n", __func__);
@@ -419,7 +434,9 @@ err_alloc_dev:
 
 static void __exit doubletap2wake_exit(void)
 {
+#ifndef ANDROID_TOUCH_DECLARED
     kobject_del(android_touch_kobj);
+#endif
 #ifdef CONFIG_POWERSUSPEND
 	unregister_power_suspend(&dt2w_power_suspend_handler);
 #endif
