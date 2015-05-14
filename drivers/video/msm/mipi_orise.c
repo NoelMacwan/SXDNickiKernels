@@ -18,6 +18,15 @@
 #include <mach/vreg.h>
 #include <linux/gpio.h>
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/input/sweep2wake.h>
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
+#endif
+
 #define TRULY_PANEL_ID_EARLY 0x40
 #define AUO_PANEL_ID 0x42
 #define CMI_PANEL_ID 0x43
@@ -1092,6 +1101,14 @@ static int mipi_orise_lcd_on(struct platform_device *pdev)
 	if (rc > 0)
 		rc = 0;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	s2w_scr_suspended = false;
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	dt2w_scr_suspended = false;
+#endif
+#endif
 	return rc;
 }
 
@@ -1121,6 +1138,14 @@ static int mipi_orise_lcd_off(struct platform_device *pdev)
 
 	display_initialize = 0;
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	s2w_scr_suspended = false;
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	dt2w_scr_suspended = true;
+#endif
+#endif
 	return 0;
 }
 

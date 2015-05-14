@@ -33,11 +33,16 @@
 #include <linux/regulator/consumer.h>
 #include <linux/input/synaptics_dsx.h>
 #include <linux/input/synaptics_dsx_rmi4_i2c.h>
+
 #ifdef KERNEL_ABOVE_2_6_38
 #include <linux/input/mt.h>
 #endif
 
 #include <linux/input/FIH-tool/config.h>
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+#include <linux/input/doubletap2wake.h>
+#endif
 
 #define DRIVER_NAME "synaptics_dsx_i2c"
 #define INPUT_PHYS_NAME "synaptics_dsx_i2c/input0"
@@ -550,7 +555,8 @@ static void synaptics_rmi4_proc_fngr(struct synaptics_rmi4_data *rmi4_data,
 			if( show_log )
 			{
 				touch_info->status	= !touch_info->status;
-				pr_debug( "ITUCH : <%d>(%s)[%d(%d):%d(%d)]-%u\n", finger, state_down ? "down" : "up", touch_info->x, touch_info->wx, touch_info->y, touch_info->wy, touch_info->count );
+				if((state_down) && (finger<1)) touchdown = true;
+				printk( "ITUCH : <%d>(%s)[%d(%d):%d(%d)]-%u\n", finger, state_down ? "down" : "up", touch_info->x, touch_info->wx, touch_info->y, touch_info->wy, touch_info->count );
 			}
 
 			if( state_up )
@@ -2294,6 +2300,13 @@ static int __devexit synaptics_rmi4_remove(struct i2c_client *client)
  */
 static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 {
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	if (dt2w_switch > 0) {
+		pr_info("sleep avoided!\n");
+		return;
+	} else {
+#endif
 	int retval;
 	unsigned char device_ctrl;
 
@@ -2322,6 +2335,9 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
 		rmi4_data->sensor_sleep = true;
 	}
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	}
+#endif
 	return;
 }
 
@@ -2332,8 +2348,19 @@ static void synaptics_rmi4_sensor_sleep(struct synaptics_rmi4_data *rmi4_data)
  *
  * This function wakes the sensor from sleep.
  */
+
+static bool ngxson_touch_slept = false;
+
 static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 {
+
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	if (dt2w_switch > 0) {
+		pr_info("wake avoided!\n");
+		return;
+	} else {
+#endif
+
 	int retval;
 	unsigned char device_ctrl;
 
@@ -2362,6 +2389,9 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
 		rmi4_data->sensor_sleep = false;
 	}
 
+#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
+	}
+#endif
 	return;
 }
 
@@ -2375,12 +2405,19 @@ static void synaptics_rmi4_sensor_wake(struct synaptics_rmi4_data *rmi4_data)
  * This function calls synaptics_rmi4_sensor_sleep() to stop finger
  * data acquisition and put the sensor to sleep.
  */
+
 static void synaptics_rmi4_early_suspend(struct early_suspend *h)
 {
 	struct synaptics_rmi4_data *rmi4_data =
 			container_of(h, struct synaptics_rmi4_data,
 			early_suspend);
 
+printk( "ngxson: debug synaptics_rmi4_early_suspend\n");
+if ((dt2w_switch > 0)) {
+	printk( "ngxson: debug dt2w on\n");
+	synaptics_rmi4_irq_enable(rmi4_data, true);
+} else {
+	ngxson_touch_slept = true;
 	rmi4_data->touch_stopped = true;
 	wake_up(&rmi4_data->wait);
 	synaptics_rmi4_irq_enable(rmi4_data, false);
@@ -2388,7 +2425,7 @@ static void synaptics_rmi4_early_suspend(struct early_suspend *h)
 
 	if (rmi4_data->full_pm_cycle)
 		synaptics_rmi4_suspend(&(rmi4_data->input_dev->dev));
-
+}
 	return;
 }
 
@@ -2407,6 +2444,11 @@ static void synaptics_rmi4_late_resume(struct early_suspend *h)
 			container_of(h, struct synaptics_rmi4_data,
 			early_suspend);
 
+printk( "ngxson: debug synaptics_rmi4_late_resume\n");
+if ((dt2w_switch > 0) && (!ngxson_touch_slept)) {
+	printk( "ngxson: debug dt2w on\n");
+} else {
+	ngxson_touch_slept = false;
 	if (rmi4_data->full_pm_cycle)
 		synaptics_rmi4_resume(&(rmi4_data->input_dev->dev));
 
@@ -2415,7 +2457,7 @@ static void synaptics_rmi4_late_resume(struct early_suspend *h)
 		rmi4_data->touch_stopped = false;
 		synaptics_rmi4_irq_enable(rmi4_data, true);
 	}
-
+}
 	return;
 }
 #endif
@@ -2435,6 +2477,8 @@ static int synaptics_rmi4_suspend(struct device *dev)
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
 	const struct synaptics_dsx_platform_data *platform_data =
 			rmi4_data->board;
+
+printk( "ngxson: debug synaptics_rmi4_suspend\n");
 
 	if (!rmi4_data->sensor_sleep) {
 		rmi4_data->touch_stopped = true;
@@ -2464,6 +2508,8 @@ static int synaptics_rmi4_resume(struct device *dev)
 	struct synaptics_rmi4_data *rmi4_data = dev_get_drvdata(dev);
 	const struct synaptics_dsx_platform_data *platform_data =
 			rmi4_data->board;
+
+printk( "ngxson: debug synaptics_rmi4_resume\n");
 
 	if (platform_data->regulator_en)
 		regulator_enable(rmi4_data->regulator);
